@@ -14,7 +14,7 @@ export default async function Page() {
     (SELECT COUNT(*) FROM users WHERE role IN ('dosen','mahasiswa') AND status='active') aktif,
     (SELECT COUNT(*) FROM users WHERE role IN ('dosen','mahasiswa') AND status='inactive') nonaktif,
     (SELECT COUNT(*) FROM task_students WHERE status='completed') done`);
-  const act = await query("SELECT DATE_FORMAT(created_at,'%Y-%m') m, COUNT(*) n FROM activity_logs WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL 11 MONTH) GROUP BY m");
+  const act = await query("SELECT TO_CHAR(created_at,'YYYY-MM') m, COUNT(*) n FROM activity_logs WHERE created_at >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '11 months' GROUP BY m");
   const map = new Map(act.map((r: any) => [r.m, Number(r.n)]));
   const now = new Date();
   const chart = Array.from({ length: 12 }, (_, i) => {
@@ -24,7 +24,7 @@ export default async function Page() {
   });
   const lecturers = await query("SELECT id,name,status FROM users WHERE role='dosen' ORDER BY created_at DESC LIMIT 3");
   const popular = await query(`SELECT t.title,c.name course,COUNT(s.id) n FROM tasks t JOIN courses c ON c.id=t.course_id
-    LEFT JOIN task_students ts ON ts.task_id=t.id LEFT JOIN task_submissions s ON s.task_student_id=ts.id GROUP BY t.id ORDER BY n DESC LIMIT 3`);
+    LEFT JOIN task_students ts ON ts.task_id=t.id LEFT JOIN task_submissions s ON s.task_student_id=ts.id GROUP BY t.id,t.title,c.name ORDER BY n DESC LIMIT 3`);
   const logs = await query("SELECT description,created_at FROM activity_logs ORDER BY created_at DESC LIMIT 5");
   const cards = [["Total Dosen", t.dosen, "person_pin"], ["Total Mahasiswa", t.mhs, "groups"], ["Total Mata Kuliah", t.courses, "menu_book"], ["Total Tugas", t.tasks, "assignment"]];
   return (

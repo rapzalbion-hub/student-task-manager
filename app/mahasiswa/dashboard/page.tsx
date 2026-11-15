@@ -11,14 +11,14 @@ export default async function Page() {
   const me = await requireRole("mahasiswa");
   await ensureReminders(me.uid);
   const [t] = await query(`SELECT COUNT(*) total,
-    COALESCE(SUM(ts.status='in_progress' AND s.id IS NULL),0) doing,
-    COALESCE(SUM(s.id IS NOT NULL),0) done,
-    COALESCE(SUM((s.id IS NULL AND t.deadline<NOW()) OR s.status='late'),0) late
+    COUNT(*) FILTER (WHERE ts.status='in_progress' AND s.id IS NULL) doing,
+    COUNT(s.id) done,
+    COUNT(*) FILTER (WHERE (s.id IS NULL AND t.deadline<NOW()) OR s.status='late') late
     FROM task_students ts JOIN tasks t ON t.id=ts.task_id LEFT JOIN task_submissions s ON s.task_student_id=ts.id WHERE ts.student_id=?`, [me.uid]);
   const near = await query(`SELECT t.id,t.title,t.deadline,c.name course FROM task_students ts JOIN tasks t ON t.id=ts.task_id JOIN courses c ON c.id=t.course_id
     LEFT JOIN task_submissions s ON s.task_student_id=ts.id WHERE ts.student_id=? AND s.id IS NULL AND t.deadline>=NOW() ORDER BY t.deadline LIMIT 3`, [me.uid]);
-  const rem = await query(`SELECT t.id,t.title,t.deadline,(t.deadline<NOW()) past,DATEDIFF(DATE(t.deadline),CURDATE()) d FROM task_students ts JOIN tasks t ON t.id=ts.task_id
-    LEFT JOIN task_submissions s ON s.task_student_id=ts.id WHERE ts.student_id=? AND s.id IS NULL AND DATEDIFF(DATE(t.deadline),CURDATE())<=1 ORDER BY t.deadline LIMIT 6`, [me.uid]);
+  const rem = await query(`SELECT t.id,t.title,t.deadline,(t.deadline<NOW()) past,(t.deadline::date-CURRENT_DATE) d FROM task_students ts JOIN tasks t ON t.id=ts.task_id
+    LEFT JOIN task_submissions s ON s.task_student_id=ts.id WHERE ts.student_id=? AND s.id IS NULL AND (t.deadline::date-CURRENT_DATE)<=1 ORDER BY t.deadline LIMIT 6`, [me.uid]);
   const mine = await query(`SELECT t.id,t.title,c.name course,t.deadline,ts.progress,ts.status work,s.status sub,(s.submitted_at>t.deadline) late FROM task_students ts JOIN tasks t ON t.id=ts.task_id
     JOIN courses c ON c.id=t.course_id LEFT JOIN task_submissions s ON s.task_student_id=ts.id WHERE ts.student_id=? ORDER BY t.deadline LIMIT 3`, [me.uid]);
   return (

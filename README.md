@@ -1,11 +1,11 @@
 # Student Task Manager
 
-Website manajemen tugas perkuliahan (Admin, Dosen, Mahasiswa). Next.js (App Router) + TypeScript + Tailwind + MySQL. Tema "Academic Focus".
+Website manajemen tugas perkuliahan (Admin, Dosen, Mahasiswa). Next.js (App Router) + TypeScript + Tailwind + PostgreSQL. Tema "Academic Focus".
 
 ## Instalasi
 1. `npm install`
-2. Salin `.env.example` menjadi `.env`, lalu isi (Laragon: `DB_PASSWORD` dikosongkan).
-3. Buat database: jalankan `db/schema.sql` (HeidiSQL: File > Run SQL file, atau `mysql -u root < db/schema.sql`).
+2. Salin `.env.example` menjadi `.env`, lalu isi `DATABASE_URL` dengan connection string PostgreSQL. Untuk Supabase, ambil connection string dari Project Settings > Database; encode karakter khusus pada password URL dan gunakan mode SSL yang disediakan.
+3. Jalankan `db/schema.sql` pada database PostgreSQL yang dipilih.
 4. Isi data contoh: `npm run db:seed` (aman dijalankan ulang; juga menambah kolom baru jika database lama).
 5. Jalankan: `npm run dev` lalu buka http://localhost:3000
 
@@ -25,7 +25,7 @@ Contoh Kode Tugas: `TGS-WEB-8F29`, `TGS-DB-3K71`, `TGS-RPL-5Q02`.
 ## Aturan inti
 - Tidak ada pendaftaran mandiri; akun dibuat Admin. Tidak ada penghapusan akun/mata kuliah (hanya nonaktif).
 - Password awal mahasiswa = tanggal lahir (DDMMYYYY) + 2 digit terakhir NIM (`lib/password.ts`).
-- Login dan permintaan reset password dibatasi 5 kali per 15 menit per identitas; catatannya disimpan di MySQL agar berlaku lintas proses.
+- Login dan permintaan reset password dibatasi 5 kali per 15 menit per identitas; catatannya disimpan di PostgreSQL agar berlaku lintas proses.
 - Upload: PDF, DOC, DOCX, ZIP, PNG, JPG; maks. `MAX_UPLOAD_MB` per file, 5 file per pengumpulan. Disimpan di `storage/uploads/` (di luar `public/`), diunduh lewat `/api/files/[id]` dengan pengecekan otorisasi.
 
 ## Login dengan email & lupa password
@@ -35,7 +35,7 @@ Dosen dan Mahasiswa dapat mengisi email di menu Profile (perlu konfirmasi passwo
 Jalankan `npm run admin:reset` untuk menyamakan akun admin dengan `ADMIN_USERNAME`/`ADMIN_PASSWORD` di `.env`, lalu restart `npm run dev`. Kunci percobaan login akan berakhir otomatis setelah 15 menit.
 
 ## Database lama
-Jika database dibuat dari schema versi awal, jalankan `npm run db:seed` (membuat tabel pembatas percobaan login) atau jalankan migrasi yang dibutuhkan dari `db/migrations/`.
+Untuk database PostgreSQL lama, jalankan migrasi yang dibutuhkan dari `db/migrations/`, lalu `npm run db:seed`. Tidak ada migrasi data otomatis dari database MySQL lama.
 
 Untuk `SESSION_SECRET`, gunakan string acak minimal 32 karakter, misalnya hasil `openssl rand -base64 32`. Nilai contoh di `.env.example` tidak dapat dipakai untuk login.
 

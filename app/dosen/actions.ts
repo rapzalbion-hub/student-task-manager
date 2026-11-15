@@ -41,10 +41,10 @@ export async function createTask(fd: FormData) {
   let id = 0;
   for (let i = 0; i < 5 && !id; i++) {
     try {
-      const r: any = await query("INSERT INTO tasks (lecturer_id,course_id,code,title,description,task_type,assessment_type,deadline) VALUES (?,?,?,?,?,?,?,?)",
+      const [r]: any = await query("INSERT INTO tasks (lecturer_id,course_id,code,title,description,task_type,assessment_type,deadline) VALUES (?,?,?,?,?,?,?,?) RETURNING id",
         [me.uid, d.course_id, taskCode(c.name), d.title, d.description, d.task_type, d.assessment_type, dt(d.deadline)]);
-      id = r.insertId;
-    } catch (e: any) { if (e?.code !== "ER_DUP_ENTRY") throw e; }
+      id = r.id;
+    } catch (e: any) { if (e?.code !== "23505") throw e; }
   }
   if (!id) go(back, "Gagal membuat Kode Tugas, silakan coba lagi.");
   for (const f of sv.saved ?? []) await query("INSERT INTO attachments (task_id,original_name,stored_name,file_type,file_size) VALUES (?,?,?,?,?)", [id, f.original, f.stored, f.type, f.size]);

@@ -24,7 +24,7 @@ export async function login(_prev: { error?: string } | undefined, fd: FormData)
     u = rows[0];
   } catch (e) {
     console.error(e);
-    return { error: "Gagal terhubung ke database. Periksa MySQL dan file .env." };
+    return { error: "Gagal terhubung ke PostgreSQL. Periksa DATABASE_URL di file .env." };
   }
   if (!u || !(await bcrypt.compare(password, u.password_hash))) {
     const n = await recordFail("all", identity);

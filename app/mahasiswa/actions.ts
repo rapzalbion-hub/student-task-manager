@@ -20,7 +20,7 @@ export async function claimTask(_prev: { error?: string } | undefined, fd: FormD
   const ex = await query("SELECT id FROM task_students WHERE task_id=? AND student_id=?", [t.id, me.uid]);
   if (ex.length) return { error: "Tugas ini sudah pernah Anda ambil." };
   try { await query("INSERT INTO task_students (task_id,student_id) VALUES (?,?)", [t.id, me.uid]); }
-  catch (e: any) { return { error: e?.code === "ER_DUP_ENTRY" ? "Tugas ini sudah pernah Anda ambil." : "Gagal mengambil tugas." }; }
+  catch (e: any) { return { error: e?.code === "23505" ? "Tugas ini sudah pernah Anda ambil." : "Gagal mengambil tugas." }; }
   redirect(`/mahasiswa/tugas/${t.id}`);
 }
 
@@ -30,7 +30,7 @@ async function own(tsId: number, uid: number) {
   return r;
 }
 async function recalc(tsId: number) {
-  const [r] = await query("SELECT COUNT(*) total,COALESCE(SUM(is_completed),0) done FROM subtasks WHERE task_student_id=?", [tsId]);
+  const [r] = await query("SELECT COUNT(*) total,COUNT(*) FILTER (WHERE is_completed) done FROM subtasks WHERE task_student_id=?", [tsId]);
   if (Number(r.total) === 0) return;
   const pr = Math.round((Number(r.done) / Number(r.total)) * 100);
   await query("UPDATE task_students SET progress=?,status=? WHERE id=?", [pr, statusOf(pr), tsId]);
@@ -48,7 +48,7 @@ export async function addSubtask(tsId: number, fd: FormData) {
 export async function toggleSubtask(tsId: number, subId: number, _fd: FormData) {
   const me = await requireRole("mahasiswa");
   const row = await own(tsId, me.uid);
-  await query("UPDATE subtasks SET is_completed=1-is_completed WHERE id=? AND task_student_id=?", [subId, tsId]);
+  await query("UPDATE subtasks SET is_completed=NOT is_completed WHERE id=? AND task_student_id=?", [subId, tsId]);
   await recalc(tsId); done(row);
 }
 export async function renameSubtask(tsId: number, subId: number, fd: FormData) {
@@ -89,7 +89,7 @@ export async function submitTask(tsId: number, fd: FormData) {
   const [lt] = await query("SELECT (NOW()>deadline) late FROM tasks WHERE id=?", [row.task_id]);
   const late = Number(lt.late) === 1;
   const status = late ? "late" : "submitted";
-  const conn = await pool.getConnection();
+  const conn = await pool.connect();
   let sv;
   try { sv = await saveFiles(files, 5); }
   catch (e) { conn.release(); throw e; }
@@ -98,30 +98,30 @@ export async function submitTask(tsId: number, fd: FormData) {
   let oldNames: string[] = [];
   let rejected = false;
   try {
-    await conn.beginTransaction();
-    await conn.execute("SELECT id FROM task_students WHERE id=? AND student_id=? FOR UPDATE", [tsId, me.uid]);
-    const [subs]: any = await conn.execute("SELECT id,status FROM task_submissions WHERE task_student_id=?", [tsId]);
-    const sub = subs[0];
+    await conn.query("BEGIN");
+    await conn.query("SELECT id FROM task_students WHERE id=$1 AND student_id=$2 FOR UPDATE", [tsId, me.uid]);
+    const subs = await conn.query("SELECT id,status FROM task_submissions WHERE task_student_id=$1", [tsId]);
+    const sub = subs.rows[0];
     if (sub?.status === "graded") {
       rejected = true;
-      await conn.rollback();
+      await conn.query("ROLLBACK");
     } else {
       let subId: number;
       if (sub) {
-        const [old]: any = await conn.execute("SELECT stored_name FROM submission_files WHERE submission_id=?", [sub.id]);
-        oldNames = old.map((f: any) => f.stored_name);
-        await conn.execute("DELETE FROM submission_files WHERE submission_id=?", [sub.id]);
-        await conn.execute("UPDATE task_submissions SET submitted_at=NOW(),status=? WHERE id=?", [status, sub.id]);
+        const old = await conn.query("SELECT stored_name FROM submission_files WHERE submission_id=$1", [sub.id]);
+        oldNames = old.rows.map((f: any) => f.stored_name);
+        await conn.query("DELETE FROM submission_files WHERE submission_id=$1", [sub.id]);
+        await conn.query("UPDATE task_submissions SET submitted_at=NOW(),status=$1 WHERE id=$2", [status, sub.id]);
         subId = sub.id;
       } else {
-        const [result]: any = await conn.execute("INSERT INTO task_submissions (task_student_id,submitted_at,status) VALUES (?,NOW(),?)", [tsId, status]);
-        subId = result.insertId;
+        const result = await conn.query("INSERT INTO task_submissions (task_student_id,submitted_at,status) VALUES ($1,NOW(),$2) RETURNING id", [tsId, status]);
+        subId = result.rows[0].id;
       }
-      for (const f of saved) await conn.execute("INSERT INTO submission_files (submission_id,original_name,stored_name,file_type,file_size) VALUES (?,?,?,?,?)", [subId, f.original, f.stored, f.type, f.size]);
-      await conn.commit();
+      for (const f of saved) await conn.query("INSERT INTO submission_files (submission_id,original_name,stored_name,file_type,file_size) VALUES ($1,$2,$3,$4,$5)", [subId, f.original, f.stored, f.type, f.size]);
+      await conn.query("COMMIT");
     }
   } catch (e) {
-    await conn.rollback();
+    await conn.query("ROLLBACK");
     await removeStored(saved.map((f) => f.stored));
     throw e;
   } finally {

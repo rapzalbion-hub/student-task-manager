@@ -12,7 +12,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
   const id = Number((await params).id);
   const sp = await searchParams;
   if (!Number.isInteger(id)) notFound();
-  const [u] = await query("SELECT *,DATE_FORMAT(birth_date,'%Y-%m-%d') bd FROM users WHERE id=? AND role='mahasiswa'", [id]);
+  const [u] = await query("SELECT *,TO_CHAR(birth_date,'YYYY-MM-DD') bd FROM users WHERE id=? AND role='mahasiswa'", [id]);
   if (!u) notFound();
   const active = u.status === "active";
   return (

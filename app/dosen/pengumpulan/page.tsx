@@ -17,7 +17,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
   if (task) {
     classes = await query("SELECT DISTINCT u.class_name FROM task_students ts JOIN users u ON u.id=ts.student_id WHERE ts.task_id=? AND u.class_name IS NOT NULL AND u.class_name<>'' ORDER BY u.class_name", [task.id]);
     const kelas = classes.some((c: any) => c.class_name === sp.kelas) ? sp.kelas! : "";
-    [stats] = await query(`SELECT COUNT(*) claimed,COUNT(s.id) submitted,SUM(s.id IS NOT NULL AND s.status<>'graded') ungraded
+    [stats] = await query(`SELECT COUNT(*) claimed,COUNT(s.id) submitted,COUNT(*) FILTER (WHERE s.id IS NOT NULL AND s.status<>'graded') ungraded
       FROM task_students ts LEFT JOIN task_submissions s ON s.task_student_id=ts.id WHERE ts.task_id=?`, [task.id]);
     const w = "ts.task_id=? AND (u.name LIKE ? OR u.nim LIKE ? OR u.class_name LIKE ?)" + (f === "sudah" ? " AND s.id IS NOT NULL" : f === "belum" ? " AND s.id IS NULL" : "") + (kelas ? " AND u.class_name=?" : "");
     const p = [task.id, like(sp.q), like(sp.q), like(sp.q), ...(kelas ? [kelas] : [])];

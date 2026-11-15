@@ -15,6 +15,6 @@ export async function resetPassword(fd: FormData) {
   if (!p.success) back(p.error.issues[0].message);
   const v = await readResetToken(token);
   if (!v) redirect("/reset-password");
-  await query("UPDATE users SET password_hash=?,must_change_password=0 WHERE id=?", [await bcrypt.hash(p.data!.password, 10), v.uid]);
+  await query("UPDATE users SET password_hash=?,must_change_password=FALSE WHERE id=?", [await bcrypt.hash(p.data!.password, 10), v.uid]);
   redirect("/reset-password?done=1");
 }

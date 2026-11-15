@@ -10,7 +10,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
   const id = Number((await params).id);
   const { error } = await searchParams;
   if (!Number.isInteger(id)) notFound();
-  const [t] = await query("SELECT t.*,c.name course,c.semester,DATE_FORMAT(t.deadline,'%Y-%m-%dT%H:%i') dl FROM tasks t JOIN courses c ON c.id=t.course_id WHERE t.id=? AND t.lecturer_id=?", [id, me.uid]);
+  const [t] = await query("SELECT t.*,c.name course,c.semester,TO_CHAR(t.deadline,'YYYY-MM-DD\"T\"HH24:MI') dl FROM tasks t JOIN courses c ON c.id=t.course_id WHERE t.id=? AND t.lecturer_id=?", [id, me.uid]);
   if (!t) notFound();
   return (
     <>

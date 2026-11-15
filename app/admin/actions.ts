@@ -12,7 +12,7 @@ const status = z.enum(["active", "pending", "inactive"]);
 const pw = z.string().min(8, "Password minimal 8 karakter");
 const go = (path: string, error: string): never => redirect(`${path}?error=${encodeURIComponent(error)}`);
 const first = (r: { error: z.ZodError }) => r.error.issues[0].message;
-const isDup = (e: any) => e?.code === "ER_DUP_ENTRY";
+const isDup = (e: any) => e?.code === "23505";
 const ALERT = ["dosen.create", "dosen.status", "dosen.reset", "mahasiswa.create", "mahasiswa.status", "mahasiswa.reset"];
 const log = async (uid: number, action: string, desc: string) => {
   await query("INSERT INTO activity_logs (user_id,action,description) VALUES (?,?,?)", [uid, action, desc]);
@@ -33,9 +33,9 @@ export async function createLecturer(fd: FormData) {
   const d = p.data!;
   let id = 0;
   const err = await tryDb(async () => {
-    const r: any = await query("INSERT INTO users (role,name,nip,email,password_hash,status,must_change_password) VALUES ('dosen',?,?,?,?,?,1)",
+    const [r]: any = await query("INSERT INTO users (role,name,nip,email,password_hash,status,must_change_password) VALUES ('dosen',?,?,?,?,?,TRUE) RETURNING id",
       [d.name, d.nip, d.email.toLowerCase(), await bcrypt.hash(d.password, 10), d.status]);
-    id = r.insertId;
+    id = r.id;
   }, "NIP atau email sudah terdaftar.");
   if (err) go("/admin/dosen/tambah", err);
   await log(s.uid, "dosen.create", `Dosen ${d.name} ditambahkan oleh Admin`);
@@ -66,8 +66,8 @@ export async function resetLecturerPassword(id: number, fd: FormData) {
   const path = `/admin/dosen/${id}/edit`;
   const pass = String(fd.get("password") ?? "");
   if (pass.length < 8) go(path, "Password minimal 8 karakter.");
-  const r: any = await query("UPDATE users SET password_hash=?,must_change_password=1 WHERE id=? AND role='dosen'", [await bcrypt.hash(pass, 10), id]);
-  if (!r.affectedRows) go("/admin/dosen", "Dosen tidak ditemukan.");
+  const r = await query("UPDATE users SET password_hash=?,must_change_password=TRUE WHERE id=? AND role='dosen' RETURNING id", [await bcrypt.hash(pass, 10), id]);
+  if (!r.length) go("/admin/dosen", "Dosen tidak ditemukan.");
   await log(s.uid, "dosen.reset", `Password dosen #${id} direset`);
   redirect(`${path}?saved=1`);
 }
@@ -81,7 +81,7 @@ export async function createStudent(fd: FormData) {
   const p = z.object({ ...studentBase, nim: z.string().trim().regex(/^\d{5,20}$/, "NIM harus berupa angka (5-20 digit)"), status: z.enum(["active", "pending"]), birth_date: birth }).safeParse(Object.fromEntries(fd));
   if (!p.success) go("/admin/mahasiswa/tambah", first(p));
   const d = p.data!;
-  const err = await tryDb(async () => query("INSERT INTO users (role,name,nim,email,class_name,study_program,birth_date,password_hash,status,must_change_password) VALUES ('mahasiswa',?,?,?,?,?,?,?,?,1)",
+  const err = await tryDb(async () => query("INSERT INTO users (role,name,nim,email,class_name,study_program,birth_date,password_hash,status,must_change_password) VALUES ('mahasiswa',?,?,?,?,?,?,?,?,TRUE)",
     [d.name, d.nim, d.email, d.class_name, d.study_program, d.birth_date, await bcrypt.hash(studentPassword(d.birth_date, d.nim), 10), d.status]), "NIM atau email sudah terdaftar.");
   if (err) go("/admin/mahasiswa/tambah", err);
   await log(s.uid, "mahasiswa.create", `Mahasiswa ${d.name} (${d.nim}) ditambahkan`);
@@ -106,11 +106,11 @@ export async function resetStudentPassword(id: number, fd: FormData) {
   let pass = String(fd.get("password") ?? "").trim();
   const generated = !pass;
   if (generated) {
-    const [u] = await query("SELECT nim,DATE_FORMAT(birth_date,'%Y-%m-%d') bd FROM users WHERE id=? AND role='mahasiswa'", [id]);
+    const [u] = await query("SELECT nim,TO_CHAR(birth_date,'YYYY-MM-DD') bd FROM users WHERE id=? AND role='mahasiswa'", [id]);
     pass = u?.bd ? studentPassword(u.bd, u.nim) : randomBytes(6).toString("base64url");
   }
   else if (pass.length < 8) go(path, "Password minimal 8 karakter.");
-  await query("UPDATE users SET password_hash=?,must_change_password=1 WHERE id=? AND role='mahasiswa'", [await bcrypt.hash(pass, 10), id]);
+  await query("UPDATE users SET password_hash=?,must_change_password=TRUE WHERE id=? AND role='mahasiswa'", [await bcrypt.hash(pass, 10), id]);
   await log(s.uid, "mahasiswa.reset", `Password mahasiswa #${id} direset`);
   redirect(`${path}?saved=1${generated ? `&newpw=${encodeURIComponent(pass)}` : ""}`);
 }

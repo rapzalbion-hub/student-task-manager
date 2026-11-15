@@ -18,7 +18,7 @@ export async function changePassword(fd: FormData) {
   const [u] = await query("SELECT password_hash FROM users WHERE id=?", [s.uid]);
   if (!u || !(await bcrypt.compare(p.data!.current, u.password_hash))) err(back, "Password saat ini salah.");
   if (p.data!.next === p.data!.current) err(back, "Password baru tidak boleh sama dengan password lama.");
-  await query("UPDATE users SET password_hash=?,must_change_password=0 WHERE id=?", [await bcrypt.hash(p.data!.next, 10), s.uid]);
+  await query("UPDATE users SET password_hash=?,must_change_password=FALSE WHERE id=?", [await bcrypt.hash(p.data!.next, 10), s.uid]);
   if (s.mcp) {
     await createSession({ uid: s.uid, role: s.role, name: s.name });
     redirect(`/${s.role}/dashboard`);
@@ -35,6 +35,6 @@ export async function updateEmail(fd: FormData) {
   const [u] = await query("SELECT password_hash FROM users WHERE id=?", [s.uid]);
   if (!u || !(await bcrypt.compare(String(fd.get("current") ?? ""), u.password_hash))) err(back, "Password saat ini salah.");
   try { await query("UPDATE users SET email=? WHERE id=?", [p.data, s.uid]); }
-  catch (e: any) { err(back, e?.code === "ER_DUP_ENTRY" ? "Email sudah dipakai akun lain." : "Gagal menyimpan email."); }
+  catch (e: any) { err(back, e?.code === "23505" ? "Email sudah dipakai akun lain." : "Gagal menyimpan email."); }
   redirect(`${back}?ok=1`);
 }
